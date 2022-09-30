@@ -10,10 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 #matematica
 import math as mt
-#Financiera
-import yfinance as yf
-#pyfolio
-#import pyfolio as pf
+
 
 
 ################################################################################
@@ -22,7 +19,9 @@ import yfinance as yf
 
 v_t=r["v_t"]
 x_barra=r["x_barra"]
-ticker=r["ticker"]
+
+print(v_t)
+
 
 
 ################################################################################
@@ -30,16 +29,14 @@ ticker=r["ticker"]
 ################################################################################
 
 
-
-
 #Definir número de interacciones
 
-num_ports=100000
+num_ports=50000
 
 
 #Ejecutar interacciones
 
-all_weights=np.zeros((num_ports,len(ticker)))
+all_weights=np.zeros((num_ports,7))
 
 
 #Generar pesos
@@ -48,14 +45,15 @@ all_weights=np.zeros((num_ports,len(ticker)))
 
 for ind in range(num_ports):
 
-     weights=np.array(np.random.random(len(ticker)))
+     weights=np.array(np.random.random(7))
      weights=weights/np.sum(weights)         
    
      all_weights[ind:]=weights
 
 
 
-all_weights=all_weights.round(2)
+
+
 
 
 #Crear data frame
@@ -68,62 +66,58 @@ df
 
 
 
-################################################################################
-#Calcular TARI
-################################################################################
+#Calcular el Sharpe ratio
 
-#"""
-#ER: Expected Return
-#ETL:Expected Tail loss
-#TARI: Tail Adjusted Return Indicator
-#""""
+retorno=np.zeros(len(df.index))
+VaR=np.zeros(len(df.index))
+CVaR=np.zeros(len(df.index))
+sharpe_VaR=np.zeros(len(df.index))
+sharpe_CVaR=np.zeros(len(df.index))
 
-ER=np.zeros(len(df.index))
-ETL=np.zeros(len(df.index))
-TARI=np.zeros(len(df.index))
+
+
 
 
 
 for ind in range(len(df.index)):
 
-     ER[ind]=np.sum(x_barra*df.iloc[ind])
+
+     retorno[ind]=np.sum(x_barra*df.iloc[ind])
+     
+     VaR[ind]=-1*(np.quantile(np.dot(v_t, df.iloc[ind]), 0.05) )
      
      retorno_cartera = np.sort(np.dot(v_t, df.iloc[ind]))
      localizador=mt.ceil((len(retorno_cartera)+1)*0.05)
-     ETL[ind]=-1*(retorno_cartera[0:(localizador-1)].mean())
+     CVaR[ind]=-1*(retorno_cartera[0:(localizador-1)].mean())
+
+     sharpe_VaR[ind]=retorno[ind]/ VaR[ind]
+     sharpe_CVaR[ind]=retorno[ind]/ CVaR[ind]
+
    
-     TARI[ind]=ER[ind]/ ETL[ind]
+#Imprimir
+print("Mayor Sharpe: ", sharpe_VaR.max())
+print("Lugar del mayor sharpe: ",sharpe_VaR.argmax()) 
+print("Pesos del mayor sharpe: ",df.iloc[sharpe_VaR.argmax()])
 
 
 
 #Imprimir
-print("Mayor TARI: ", TARI.max())
-print("Lugar del mayor TARI: ", TARI.argmax()) 
-print("Pesos del mayor TARI: ",df.iloc[TARI.argmax()])
+print("Mayor Sharpe: ", sharpe_CVaR.max())
+print("Lugar del mayor sharpe: ",sharpe_CVaR.argmax()) 
+print("Pesos del mayor sharpe: ",df.iloc[sharpe_CVaR.argmax()])
 
 
 
-# 4: Stock: 0.051178229039275505
-#5 : 0.0496541165033135
-#6:  0.050267636912560795
-#10: 0.04690070799141482
-#20:  0.04172045097277336
-#30: 0.054659
 
 
 
-################################################################################
-#Graficar frontera 
-################################################################################
-
-
-max_sr_ret=ER[TARI.argmax()]
-max_sr_vol=ETL[TARI.argmax()]
-plt.figure(figsize=(20,10))
-plt.scatter( ETL,ER,c=TARI,cmap="plasma")
-plt.colorbar(label="TARI")
-plt.xlabel("ETL")
-plt.ylabel("ER")
+max_sr_ret=retorno[sharpe_VaR.argmax()]
+max_sr_vol=VaR[sharpe_VaR.argmax()]
+plt.figure(figsize=(12,8))
+plt.scatter( VaR,retorno,c=sharpe_VaR,cmap="plasma")
+plt.colorbar(label="Sharpe Ratio")
+plt.xlabel("VaR")
+plt.ylabel("Return")
 
 plt.scatter(max_sr_vol,max_sr_ret,c="red",s=50,edgecolors="black")
 
@@ -138,68 +132,17 @@ plt.show()
 
 
 
-
-
-
-
-
-
-
-################################################################################
-#test
-################################################################################
-
-#Descargar datos
-stocks = yf.download(ticker,'2021-1-1','2022-1-1')['Adj Close']
-
-
-# Plot all the close prices
-((stocks.pct_change()+1).cumprod()).plot(figsize=(10, 7))
-
-# Show the legend
-plt.legend()
-
-# Define the label for the title of the figure
-plt.title("Returns", fontsize=16)
-
-# Define the labels for x-axis and y-axis
-plt.ylabel('Cumulative Returns', fontsize=14)
-plt.xlabel('Year', fontsize=14)
-
-# Plot the grid lines
-plt.grid(which="major", color='k', linestyle='-.', linewidth=0.5)
-plt.show()
-
-#------------------------------------------------------------------------------
-#Estimar retornos
-
-
-
-pesos_m=[df.iloc[sharpe_CVaR.argmax()][0] , 
-         df.iloc[sharpe_CVaR.argmax()][1], 
-         df.iloc[sharpe_CVaR.argmax()][2],
-         df.iloc[sharpe_CVaR.argmax()][3],
-         df.iloc[sharpe_CVaR.argmax()][4],
-         df.iloc[sharpe_CVaR.argmax()][5],
-         ]  
-
-
-
-
-pesos_m=[1/6, 1/6, 1/6, 1/6, 1/6, 1/6]
-
-
-vv=np.dot((stocks.pct_change()+1).cumprod(), pesos_m)
-
-
-
-t=range(1,(len(vv)+1))
-
+max_sr_ret=retorno[sharpe_CVaR.argmax()]
+max_sr_vol=CVaR[sharpe_CVaR.argmax()]
 plt.figure(figsize=(12,8))
-plt.scatter(t,vv)
+plt.scatter( CVaR,retorno,c=sharpe_CVaR,cmap="plasma")
+plt.colorbar(label="Sharpe Ratio")
+plt.xlabel("CVaR")
+plt.ylabel("Return")
+
+plt.scatter(max_sr_vol,max_sr_ret,c="red",s=50,edgecolors="black")
+
+# show plot
 plt.show()
 
 
-
-len(vv)
-len(t)
